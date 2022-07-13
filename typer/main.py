@@ -9,19 +9,8 @@ from enum import Enum
 from functools import update_wrapper
 from pathlib import Path
 from traceback import FrameSummary, StackSummary
-from types import TracebackType
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    ModuleType,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
-)
+from types import ModuleType, TracebackType
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 from uuid import UUID
 
 import click
