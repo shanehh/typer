@@ -3,13 +3,25 @@ import os
 import site
 import sys
 import traceback
+from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 from functools import update_wrapper
 from pathlib import Path
 from traceback import FrameSummary, StackSummary
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    ModuleType,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 from uuid import UUID
 
 import click
@@ -49,11 +61,13 @@ except ImportError:  # pragma: nocover
 
 _original_except_hook = sys.excepthook
 _typer_developer_exception_attr_name = "__typer_developer_exception__"
+_care_exception_module: ModuleType = None
 
 
 def except_hook(
     exc_type: Type[BaseException], exc_value: BaseException, tb: TracebackType
 ) -> None:
+    global _care_exception_module
     exception_config: Union[DeveloperExceptionConfig, None] = getattr(
         exc_value, _typer_developer_exception_attr_name, None
     )
@@ -80,12 +94,11 @@ def except_hook(
         return
     tb_exc = traceback.TracebackException.from_exception(exc)
     stack: List[FrameSummary] = []
-    for frame in tb_exc.stack:
-        if any(
-            [frame.filename.startswith(path) for path in supress_internal_dir_names]
-        ):
-            if not exception_config.pretty_exceptions_short:
-                # Hide the line for All internal libraries
+    if _care_exception_module is not None:
+        for frame in tb_exc.stack:
+            if frame.filename == _care_exception_module.__file__:
+                stack.append(frame)
+            else:
                 stack.append(
                     traceback.FrameSummary(
                         filename=frame.filename,
@@ -94,8 +107,23 @@ def except_hook(
                         line="",
                     )
                 )
-        else:
-            stack.append(frame)
+    else:
+        for frame in tb_exc.stack:
+            if any(
+                [frame.filename.startswith(path) for path in supress_internal_dir_names]
+            ):
+                if not exception_config.pretty_exceptions_short:
+                    # Hide the line for All internal libraries
+                    stack.append(
+                        traceback.FrameSummary(
+                            filename=frame.filename,
+                            lineno=frame.lineno,
+                            name=frame.name,
+                            line="",
+                        )
+                    )
+            else:
+                stack.append(frame)
     # Type ignore ref: https://github.com/python/typeshed/pull/8244
     final_stack_summary = StackSummary.from_list(stack)  # type: ignore
     tb_exc.stack = final_stack_summary
@@ -303,6 +331,15 @@ class Typer:
                 rich_help_panel=rich_help_panel,
             )
         )
+
+    @contextmanager
+    def exception_only_care(self, module: ModuleType):
+        global _care_exception_module
+        _care_exception_module = module
+        try:
+            yield
+        finally:
+            _care_exception_module = None
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if sys.excepthook != except_hook:
