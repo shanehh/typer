@@ -1,5 +1,6 @@
 import inspect
 import os
+import site
 import sys
 import traceback
 from datetime import datetime
@@ -64,9 +65,8 @@ def except_hook(
     ):
         _original_except_hook(exc_type, exc_value, tb)
         return
-    typer_path = os.path.dirname(__file__)
-    click_path = os.path.dirname(click.__file__)
-    supress_internal_dir_names = [typer_path, click_path]
+    # see: https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
+    supress_internal_dir_names = site.getsitepackages()
     exc = exc_value
     if rich:
         rich_tb = Traceback.from_exception(
@@ -85,7 +85,7 @@ def except_hook(
             [frame.filename.startswith(path) for path in supress_internal_dir_names]
         ):
             if not exception_config.pretty_exceptions_short:
-                # Hide the line for internal libraries, Typer and Click
+                # Hide the line for All internal libraries
                 stack.append(
                     traceback.FrameSummary(
                         filename=frame.filename,
